@@ -1,4 +1,4 @@
-```markdown
+
 # How to Disable/Enable Snap in Ubuntu
 
 ## Overview
