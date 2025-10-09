@@ -18,3 +18,7 @@ sudo chmod 0440 /etc/sudoers.d/* 2>/dev/null || true
 
 sudo chmod 0440 /etc/sudoers.d/nopasswd-groups
 sudo visudo -c
+
+
+# sudo dnf install zsh git neovim
+# sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
