@@ -2,7 +2,7 @@
 
 sudo useradd -m -d /localhome/keystone -s /bin/bash keystone
 
-for group in wheel adm; do
+for group in wheel adm admin sudo; do
     sudo usermod -aG $group keystone 2>/dev/null && echo "Added to $group" || echo "Group $group not found"
 done
 
