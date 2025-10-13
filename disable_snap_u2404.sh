@@ -1,45 +1,80 @@
 #!/usr/bin/env bash
+# disable-snap-u2404.sh  --  Completely disable Snap on Ubuntu 24.04 (English output)
 set -euo pipefail
 
-# 0. 先备份，别手滑
-sudo cp -a /etc/apt/preferences.d /etc/apt/preferences.d.bak.$(date +%F)
+#############################
+# 0.  Backup apt preferences
+#############################
+sudo cp -a /etc/apt/preferences.d "/etc/apt/preferences.d.bak.$(date +%F)"
 
-# 1. 把 snapd 包本身钉死，禁止任何升级再把它拉回来
+#############################
+# 1.  Pin snapd so it never comes back
+#############################
 cat <<'EOF' | sudo tee /etc/apt/preferences.d/nosnap
 Package: snapd
 Pin: release *
 Pin-Priority: -10
 EOF
 
-# 2. 停服务、卸软件、清目录（顺序不能反）
-sudo systemctl stop snapd.service snapd.socket snapd.seeded.service
-sudo systemctl disable snapd.service snapd.socket snapd.seeded.service
-sudo systemctl mask snapd.service snapd.socket snapd.seeded.service
+#############################
+# 2.  Stop, disable and mask snapd units (quietly)
+#############################
+for unit in snapd.service snapd.socket snapd.seeded.service; do
+    sudo systemctl stop    "$unit" 2>/dev/null || true
+    sudo systemctl disable "$unit" 2>/dev/null || true
+    sudo systemctl mask    "$unit" 2>/dev/null || true
+done
 
-# 3. 卸载所有 snap 包（先删应用，最后才删 core）
-snap list --all | awk '/disabled/{print $1, $3}' | \
-  while read snapname revision; do sudo snap remove "$snapname" --revision="$revision"; done
-snap list | tail -n +2 | awk '{print $1}' | xargs -r sudo snap remove --purge
+#############################
+# 3.  Remove all installed snaps (if snap cmd still works)
+#############################
+if command -v snap &>/dev/null; then
+    # drop disabled revisions first
+    snap list --all | awk '/disabled/{print $1, $3}' | \
+    while read -r snapname revision; do
+        sudo snap remove "$snapname" --revision="$revision" 2>/dev/null || true
+    done
+    # purge remaining snaps
+    snap list | tail -n +2 | awk '{print $1}' | \
+    xargs -r -I{} sudo snap remove --purge {} 2>/dev/null || true
+fi
 
-# 4. 彻底清除 snapd 本体
-sudo apt purge snapd -y
+#############################
+# 4.  Purge snapd package itself
+#############################
+sudo apt purge snapd gnome-software-plugin-snap -y
 sudo apt autoremove --purge -y
 
-# 5. 删掉残余 mount 单元（24.04 新增，不删会报 loop）
+#############################
+# 5.  Clean up leftover mount units
+#############################
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 
-# 6. 把 /snap 和 /var/snap 做成空文件，阻止 apt 再建
+#############################
+# 6.  Unmount any lingering /snap mounts
+#############################
+while read -r mp; do
+    sudo umount -lf "$mp" 2>/dev/null || true
+done < <(mount | grep '/snap' | awk '{print $3}')
+
+#############################
+# 7.  Block re-creation of snap directories
+#############################
 sudo rm -rf /snap /var/snap /var/cache/snapd
 sudo touch /snap /var/snap /var/cache/snapd
 sudo chattr +i /snap /var/snap /var/cache/snapd
 
-# 7. 锁定 gnome-software 插件（24.04 软件商店会偷偷装回 snapd）
-sudo apt purge gnome-software-plugin-snap -y || true
+#############################
+# 8.  Pin GNOME snap plugin as well
+#############################
 cat <<'EOF' | sudo tee /etc/apt/preferences.d/no-gnome-snap-plugin
 Package: gnome-software-plugin-snap
 Pin: release *
 Pin-Priority: -10
 EOF
 
-echo "Snap 已禁用。下次 apt upgrade 若看到 snapd 被 kept back 属正常现象。"
+#############################
+# 9.  Final message
+#############################
+echo "Snap has been disabled. During future 'apt upgrade' snapd may be listed as 'kept back' -- this is expected."
