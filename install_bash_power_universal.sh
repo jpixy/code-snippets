@@ -1,8 +1,102 @@
 #!/bin/bash
 
+# ============================================================================
 # install_bash_power_universal.sh (Enhanced Version)
-# Advanced Bash Environment Installation Script (RHEL/Ubuntu/Debian Compatible)
-# Features: Starship, fzf, ble.sh, bash-completion, modern CLI tools
+# ============================================================================
+# Advanced Bash Environment Installation Script
+# Compatible: RHEL/CentOS/Fedora, Ubuntu/Debian
+#
+# FEATURES:
+#   Core Tools:
+#     - Starship: Beautiful cross-shell prompt
+#     - fzf: Command-line fuzzy finder
+#     - ble.sh: Bash Line Editor with syntax highlighting and auto-suggestions
+#     - bash-completion: Programmable completion for bash
+#   
+#   Additional Tools:
+#     - bat: A cat clone with syntax highlighting
+#     - ripgrep (rg): Ultra-fast text search tool
+#     - fd: A simple, fast alternative to 'find'
+#     - tree, htop, ncdu: System utilities
+#
+# FILE PROTECTION POLICY:
+#   PROTECTED (Never Overwritten):
+#     - ~/.bashrc.local
+#       * Your personal configuration file
+#       * Only created if it doesn't exist
+#       * Safe to add: aliases, functions, environment variables, etc.
+#       * Will NEVER be modified by this script
+#   
+#   MANAGED (Overwritten on Each Run):
+#     - ~/.bashrc
+#       * Main bash configuration (auto-generated)
+#       * Backed up before overwriting
+#       * Do NOT manually edit (use ~/.bashrc.local instead)
+#     - ~/.config/starship.toml
+#       * Starship prompt configuration
+#       * Backed up before overwriting
+#   
+#   BACKUP POLICY:
+#     - All configurations are backed up to:
+#       ~/.bash_config_backup_YYYYMMDD_HHMMSS/
+#     - Backups include: .bashrc, .bash_profile, starship.toml
+#     - Backups are timestamped for easy restoration
+#
+# USAGE:
+#   1. Run the script:
+#      chmod +x install_bash_power_universal.sh
+#      ./install_bash_power_universal.sh
+#   
+#   2. After installation:
+#      source ~/.bashrc  # or restart your terminal
+#   
+#   3. Add personal configurations:
+#      vim ~/.bashrc.local
+#      # Add your custom aliases, functions, environment variables
+#      # This file will NEVER be overwritten
+#   
+#   4. Re-run the script anytime to:
+#      - Update system configurations
+#      - Install missing tools
+#      - Restore default settings
+#      Your ~/.bashrc.local will remain untouched
+#
+# CONFIGURATION HIERARCHY:
+#   ~/.bashrc (generated)
+#     ├── ble.sh early loading
+#     ├── Basic configurations (EDITOR, HISTSIZE, etc.)
+#     ├── Color support
+#     ├── Aliases (git, docker, npm, etc.)
+#     ├── Functions (mkcd, extract, qfind, etc.)
+#     ├── fzf integration and functions
+#     ├── bash-completion
+#     ├── Starship prompt
+#     ├── ble.sh attachment
+#     ├── ~/.bashrc.local (YOUR PERSONAL CONFIG) ← Add customizations here
+#     └── Welcome message
+#
+# EXAMPLES FOR ~/.bashrc.local:
+#   # Environment variables
+#   export EDITOR='nvim'
+#   export GOPATH="$HOME/go"
+#   
+#   # Personal aliases
+#   alias myserver='ssh user@server.com'
+#   alias work='cd ~/workspace'
+#   
+#   # Custom functions
+#   myfunction() {
+#       echo "Hello, $1!"
+#   }
+#
+# RESTORATION:
+#   If you need to restore a previous configuration:
+#     cp ~/.bash_config_backup_YYYYMMDD_HHMMSS/bashrc ~/.bashrc
+#     source ~/.bashrc
+#
+# AUTHOR: Enhanced Bash Power Environment Team
+# LICENSE: MIT
+# ============================================================================
 
 set -e
 
@@ -231,27 +325,48 @@ install_dependencies() {
     return 0
 }
 
+# ============================================================================
 # Backup Existing Configuration
+# ============================================================================
+# This function creates a timestamped backup of existing configuration files
+# before they are modified or overwritten by this script.
+#
+# BACKUP LOCATION:
+#   ~/.bash_config_backup_YYYYMMDD_HHMMSS/
+#
+# FILES BACKED UP:
+#   - ~/.bashrc              → bashrc
+#   - ~/.bash_profile        → bash_profile
+#   - ~/.config/starship.toml → .config/starship.toml
+#
+# NOTE: ~/.bashrc.local is NOT backed up because it is NEVER modified
+#       by this script.
+#
+# RESTORATION:
+#   To restore a backup:
+#     cp ~/.bash_config_backup_YYYYMMDD_HHMMSS/bashrc ~/.bashrc
+#     source ~/.bashrc
+# ============================================================================
 backup_config() {
     log_info "Backing up existing configuration..."
     
-    # Create backup directory
+    # Create backup directory with timestamp
     local backup_dir="$HOME/.bash_config_backup_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
     
-    # Backup .bashrc
+    # Backup .bashrc (will be overwritten by this script)
     if [ -f ~/.bashrc ]; then
         cp ~/.bashrc "$backup_dir/bashrc"
         log_success "Backed up .bashrc"
     fi
     
-    # Backup .bash_profile
+    # Backup .bash_profile (may be modified)
     if [ -f ~/.bash_profile ]; then
         cp ~/.bash_profile "$backup_dir/bash_profile"
         log_success "Backed up .bash_profile"
     fi
     
-    # Backup Starship configuration
+    # Backup Starship configuration (will be overwritten)
     if [ -f ~/.config/starship.toml ]; then
         mkdir -p "$backup_dir/.config"
         cp ~/.config/starship.toml "$backup_dir/.config/"
@@ -423,7 +538,38 @@ install_blesh() {
     fi
 }
 
+# ============================================================================
 # Create Enhanced bashrc Configuration
+# ============================================================================
+# This function generates the main ~/.bashrc configuration file.
+#
+# IMPORTANT: This file will be OVERWRITTEN each time the script runs.
+#            Do NOT add personal configurations here!
+#            Use ~/.bashrc.local instead for personal customizations.
+#
+# CONFIGURATION INCLUDES:
+#   1. ble.sh early loading (syntax highlighting, auto-suggestions)
+#   2. Basic environment (EDITOR, HISTSIZE, shell options)
+#   3. Color support for ls, grep, etc.
+#   4. Core aliases (ll, la, lt, .., ..., etc.)
+#   5. bat integration (ccat, bless) - non-destructive
+#   6. Git aliases (gst, gco, gc, gd, etc.)
+#   7. Directory navigation aliases
+#   8. Development tool aliases (Docker, NPM, Python)
+#   9. System monitoring aliases (cpucore, meminfo, etc.)
+#   10. Utility functions (mkcd, extract, qfind, psgrep)
+#   11. fzf configuration and functions (fh, fcd, fe, fgl, fkill)
+#   12. bash-completion configuration
+#   13. Starship prompt or fallback prompt
+#   14. ble.sh attachment (must be at the end)
+#   15. ~/.bashrc.local sourcing (for personal configs)
+#   16. Welcome message
+#
+# ALIAS POLICY:
+#   - Native commands are NOT overridden (cat, ls are preserved)
+#   - Alternative names are provided (ccat for colorful cat)
+#   - All aliases are non-destructive
+# ============================================================================
 create_enhanced_bashrc() {
     log_info "Creating enhanced Bash configuration..."
     
@@ -432,6 +578,12 @@ create_enhanced_bashrc() {
     local has_bat=$(command_exists bat && echo "true" || echo "false")
     local has_starship=$(command_exists starship && echo "true" || echo "false")
     local has_blesh=$([ -f "$HOME/.local/share/blesh/ble.sh" ] && echo "true" || echo "false")
+    local has_bash_completion=$([ -f /usr/share/bash-completion/bash_completion ] || [ -f /etc/bash_completion ] && echo "true" || echo "false")
+    local has_rg=$(command_exists rg && echo "true" || echo "false")
+    local has_fd=$(command_exists fd || command_exists fdfind && echo "true" || echo "false")
+    local has_tree=$(command_exists tree && echo "true" || echo "false")
+    local has_htop=$(command_exists htop && echo "true" || echo "false")
+    local has_ncdu=$(command_exists ncdu && echo "true" || echo "false")
     
     # Handle Ubuntu's fd command name difference
     local fd_cmd="fd"
@@ -462,10 +614,15 @@ BASHRC_HEADER
 # Bash Version: $(get_bash_version)
 # 
 # Tools Installed:
-#   - fzf: $has_fzf
-#   - bat: $has_bat
-#   - starship: $has_starship
-#   - ble.sh: $has_blesh
+#   Core:
+#     - starship: $has_starship
+#     - fzf: $has_fzf
+#     - ble.sh: $has_blesh
+#     - bash-completion: $has_bash_completion
+#   Additional:
+#     - bat: $has_bat
+#     - ripgrep: $has_rg
+#     - fd: $has_fd
 # =============================================
 
 EOF
@@ -795,20 +952,109 @@ EOF
     # Add local configuration and welcome message
     cat >> ~/.bashrc.enhanced << EOF
 # === Local Configuration Override ===
-# Add your custom aliases and functions here
-[ -f ~/.bash_aliases.local ] && source ~/.bash_aliases.local
+# Add your custom configurations, aliases, functions, and environment variables here
+[ -f ~/.bashrc.local ] && source ~/.bashrc.local
 
 # === Welcome Message ===
-echo -e "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "\033[1;32m🚀 Advanced Bash Environment Loaded!\033[0m"
-echo -e "\033[0;36m   OS: $OS_TYPE | Bash: \$(get_bash_version 2>/dev/null || echo \$BASH_VERSION)\033[0m"
-echo -e "\033[1;33m   Features:\033[0m"
-[ "$has_starship" = "true" ] && echo -e "\033[0;32m   ✓ Starship Prompt\033[0m"
-[ "$has_fzf" = "true" ] && echo -e "\033[0;32m   ✓ fzf Fuzzy Finder\033[0m"
-[ "$has_bat" = "true" ] && echo -e "\033[0;32m   ✓ bat Syntax Highlighter\033[0m"
-[ "$has_blesh" = "true" ] && echo -e "\033[0;32m   ✓ ble.sh Line Editor\033[0m"
-echo -e "\033[1;33m   Quick Commands:\033[0m gst | fh | fcd | fe | ccat"
-echo -e "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo
+echo -e "\033[1;36m╔═══════════════════════════════════════════════════════════════════╗\033[0m"
+echo -e "\033[1;36m║\033[1;32m  🚀 Advanced Bash Environment Loaded Successfully!              \033[1;36m║\033[0m"
+echo -e "\033[1;36m╚═══════════════════════════════════════════════════════════════════╝\033[0m"
+echo
+echo -e "\033[1;33m📊 System Information:\033[0m"
+echo -e "   \033[0;36m•\033[0m OS: \033[1;37m$OS_TYPE\033[0m"
+echo -e "   \033[0;36m•\033[0m Bash: \033[1;37m\$(get_bash_version 2>/dev/null || echo \$BASH_VERSION)\033[0m"
+echo -e "   \033[0;36m•\033[0m Editor: \033[1;37m\$EDITOR\033[0m"
+echo -e "   \033[0;36m•\033[0m History Size: \033[1;37m\$HISTSIZE commands\033[0m"
+echo
+echo -e "\033[1;33m🎯 Core Tools:\033[0m"
+if [ "$has_starship" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m Starship Prompt \033[0;90m[\$(command -v starship >/dev/null && starship --version 2>/dev/null | head -n1 | awk '{print \$2}' || echo 'installed')]\033[0m"
+else
+    echo -e "   \033[0;31m✗\033[0m Starship Prompt \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_fzf" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m fzf Fuzzy Finder \033[0;90m[\$(command -v fzf >/dev/null && fzf --version 2>/dev/null | awk '{print \$1}' || echo 'installed')]\033[0m"
+else
+    echo -e "   \033[0;31m✗\033[0m fzf Fuzzy Finder \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_blesh" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m ble.sh Line Editor \033[0;90m(syntax highlight + auto-suggest)\033[0m"
+else
+    echo -e "   \033[0;31m✗\033[0m ble.sh Line Editor \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_bash_completion" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m bash-completion \033[0;90m(smart tab completion)\033[0m"
+else
+    echo -e "   \033[0;31m✗\033[0m bash-completion \033[0;90m(not installed)\033[0m"
+fi
+echo
+echo -e "\033[1;33m🛠️  Additional Tools:\033[0m"
+if [ "$has_bat" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m bat \033[0;90m(syntax highlighting cat)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m bat \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_rg" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m ripgrep (rg) \033[0;90m(fast search)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m ripgrep (rg) \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_fd" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m fd \033[0;90m(fast find)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m fd \033[0;90m(not installed)\033[0m"
+fi
+echo
+echo -e "\033[1;33m🔧 System Utilities:\033[0m"
+if [ "$has_tree" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m tree \033[0;90m(directory visualization)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m tree \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_htop" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m htop \033[0;90m(process monitor)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m htop \033[0;90m(not installed)\033[0m"
+fi
+if [ "$has_ncdu" = "true" ]; then
+    echo -e "   \033[0;32m✓\033[0m ncdu \033[0;90m(disk usage analyzer)\033[0m"
+else
+    echo -e "   \033[0;90m○\033[0m ncdu \033[0;90m(not installed)\033[0m"
+fi
+echo
+echo -e "\033[1;33m📁 Configuration Files:\033[0m"
+echo -e "   \033[0;36m•\033[0m Main config: \033[1;37m~/.bashrc\033[0m"
+echo -e "   \033[0;36m•\033[0m Starship config: \033[1;37m~/.config/starship.toml\033[0m"
+echo -e "   \033[0;36m•\033[0m Personal config: \033[1;37m~/.bashrc.local\033[0m"
+echo -e "   \033[0;36m•\033[0m ble.sh location: \033[1;37m~/.local/share/blesh/\033[0m"
+if [ -d ~/.bash_config_backup_* 2>/dev/null ]; then
+    echo -e "   \033[0;36m•\033[0m Backup location: \033[1;37m\$(ls -td ~/.bash_config_backup_* 2>/dev/null | head -n1)\033[0m"
+fi
+echo
+echo -e "\033[1;33m⚡ Quick Commands:\033[0m"
+echo -e "   \033[1;36mGit:\033[0m       gst, gco, gc, gcm, gd, gps, gpl, gl, gla"
+echo -e "   \033[1;36mFuzzy:\033[0m     fh \033[0;90m(history)\033[0m, fcd \033[0;90m(dir)\033[0m, fe \033[0;90m(edit)\033[0m, fgl \033[0;90m(git log)\033[0m, fkill \033[0;90m(process)\033[0m"
+echo -e "   \033[1;36mViewing:\033[0m   ccat \033[0;90m(colorful cat)\033[0m, bless \033[0;90m(colorful less)\033[0m"
+echo -e "   \033[1;36mDocker:\033[0m    d, dc, dps, dex, dlogs"
+echo -e "   \033[1;36mUtil:\033[0m      mkcd \033[0;90m(make+cd)\033[0m, extract \033[0;90m(any archive)\033[0m, qfind \033[0;90m(quick find)\033[0m"
+echo
+echo -e "\033[1;33m⌨️  Keyboard Shortcuts:\033[0m"
+echo -e "   \033[0;36m•\033[0m \033[1;37mCtrl + R\033[0m      Fuzzy history search"
+echo -e "   \033[0;36m•\033[0m \033[1;37mCtrl + T\033[0m      Fuzzy file search"
+echo -e "   \033[0;36m•\033[0m \033[1;37mAlt + C\033[0m       Fuzzy directory search"
+echo -e "   \033[0;36m•\033[0m \033[1;37mTab\033[0m           Intelligent completion"
+echo -e "   \033[0;36m•\033[0m \033[1;37mTab + Tab\033[0m     Show all completions"
+echo
+echo -e "\033[1;33m📚 Tips & Tricks:\033[0m"
+echo -e "   \033[0;90m•\033[0m Type any command and see \033[1;32msyntax highlighting\033[0m in real-time"
+echo -e "   \033[0;90m•\033[0m Use \033[1;37m↑/↓\033[0m arrows to browse history with auto-suggestions"
+echo -e "   \033[0;90m•\033[0m Add personal config to \033[1;37m~/.bashrc.local\033[0m"
+echo -e "   \033[0;90m•\033[0m Customize prompt in \033[1;37m~/.config/starship.toml\033[0m"
+echo -e "   \033[0;90m•\033[0m Run \033[1;37msource ~/.bashrc\033[0m to reload configuration"
+echo
+echo -e "\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo
 EOF
 
     log_success "Enhanced .bashrc created successfully"
@@ -966,37 +1212,92 @@ EOF
     log_success "Starship configuration created successfully"
 }
 
+# ============================================================================
 # Complete Installation
+# ============================================================================
+# This function finalizes the installation by:
+# 1. Replacing ~/.bashrc with the newly generated configuration
+# 2. Creating ~/.bashrc.local (ONLY if it doesn't already exist)
+#
+# FILE PROTECTION:
+#   ~/.bashrc.local is YOUR personal configuration file:
+#     - Created ONLY on first run (if it doesn't exist)
+#     - NEVER modified or overwritten on subsequent runs
+#     - Safe to store all your personal configurations
+#     - Will be automatically sourced by ~/.bashrc
+#
+# WHAT TO PUT IN ~/.bashrc.local:
+#   - Personal aliases:        alias myalias='command'
+#   - Environment variables:   export MY_VAR="value"
+#   - Custom functions:        myfunc() { ... }
+#   - PATH modifications:      export PATH="$HOME/bin:$PATH"
+#   - Source other files:      [ -f ~/.secrets ] && source ~/.secrets
+#   - Any other bash configs:  shopt -s, bind, etc.
+#
+# SAFE TO RE-RUN:
+#   You can run this script multiple times to update system configurations.
+#   Your ~/.bashrc.local will always be preserved.
+# ============================================================================
 complete_installation() {
     log_info "Completing installation..."
     
-    # Replace original bashrc
+    # Replace original bashrc with newly generated one
+    # The old ~/.bashrc has already been backed up by backup_config()
     if [ -f ~/.bashrc.enhanced ]; then
         mv ~/.bashrc.enhanced ~/.bashrc
         log_success "Updated .bashrc"
     fi
     
-    # Create local aliases file if it doesn't exist
-    if [ ! -f ~/.bash_aliases.local ]; then
-        cat > ~/.bash_aliases.local << 'EOF'
+    # Create personal configuration file ONLY if it doesn't exist
+    # This ensures user's custom configurations are never lost
+    if [ ! -f ~/.bashrc.local ]; then
+        cat > ~/.bashrc.local << 'EOF'
 #!/bin/bash
 # =============================================
-# Local Bash Aliases and Functions
-# Add your custom configurations here
+# Personal Bash Configuration
+# This file is for your custom configurations
 # =============================================
+#
+# IMPORTANT: This file will NEVER be modified or overwritten by
+#            the install_bash_power_universal.sh script.
+#            It is safe to add all your personal configurations here.
+#
+# This file is automatically sourced by ~/.bashrc
 
-# Example custom aliases:
+# === Environment Variables ===
+# Examples:
+# export EDITOR='nvim'
+# export GOPATH="$HOME/go"
+# export PATH="$HOME/.local/bin:$PATH"
+
+# === Personal Aliases ===
+# Examples:
 # alias myserver='ssh user@server.com'
 # alias myproject='cd ~/projects/myproject'
+# alias ll='ls -lah'
 
-# Example custom functions:
-# hello() {
-#     echo "Hello, $1!"
+# === Custom Functions ===
+# Examples:
+# cdl() {
+#     cd "$1" && ls
+# }
+#
+# backup() {
+#     tar czf "$1.tar.gz" "$1"
 # }
 
+# === Additional Configurations ===
+# Add any other bash configurations here:
+# - shopt options
+# - bind commands
+# - prompt customization
+# - source other configuration files
+
 EOF
-        chmod 600 ~/.bash_aliases.local
-        log_success "Created local aliases file: ~/.bash_aliases.local"
+        chmod 600 ~/.bashrc.local
+        log_success "Created personal config file: ~/.bashrc.local"
+    else
+        log_info "Personal config file ~/.bashrc.local already exists (preserved)"
     fi
 }
 
@@ -1017,6 +1318,7 @@ verify_installation() {
     command_exists starship && echo -e "  ${GREEN}✓${NC} Starship: $(starship --version | head -n1)" || echo -e "  ${YELLOW}⚠${NC}  Starship: Not installed"
     command_exists fzf && echo -e "  ${GREEN}✓${NC} fzf: $(fzf --version)" || echo -e "  ${YELLOW}⚠${NC}  fzf: Not installed"
     [ -f "$HOME/.local/share/blesh/ble.sh" ] && echo -e "  ${GREEN}✓${NC} ble.sh: Installed" || echo -e "  ${YELLOW}⚠${NC}  ble.sh: Not installed"
+    ([ -f /usr/share/bash-completion/bash_completion ] || [ -f /etc/bash_completion ]) && echo -e "  ${GREEN}✓${NC} bash-completion: Installed" || echo -e "  ${YELLOW}⚠${NC}  bash-completion: Not installed"
     echo
     echo -e "${BLUE}Additional Tools:${NC}"
     command_exists bat && echo -e "  ${GREEN}✓${NC} bat: $(bat --version | head -n1)" || echo -e "  ${YELLOW}⚠${NC}  bat: Not installed"
@@ -1026,7 +1328,7 @@ verify_installation() {
     echo -e "${BLUE}Configuration Files:${NC}"
     [ -f ~/.bashrc ] && echo -e "  ${GREEN}✓${NC} .bashrc: Updated" || echo -e "  ${RED}✗${NC} .bashrc: Failed"
     [ -f ~/.config/starship.toml ] && echo -e "  ${GREEN}✓${NC} starship.toml: Created" || echo -e "  ${YELLOW}⚠${NC}  starship.toml: Not created"
-    [ -f ~/.bash_aliases.local ] && echo -e "  ${GREEN}✓${NC} .bash_aliases.local: Ready" || echo -e "  ${YELLOW}⚠${NC}  .bash_aliases.local: Missing"
+    [ -f ~/.bashrc.local ] && echo -e "  ${GREEN}✓${NC} .bashrc.local: Ready" || echo -e "  ${YELLOW}⚠${NC}  .bashrc.local: Missing"
     echo
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}🎉 Deployment Completed Successfully!${NC}"
@@ -1045,7 +1347,7 @@ verify_installation() {
     echo "   • ${CYAN}fgl${NC}      Fuzzy git log browser"
     echo
     echo -e "${YELLOW}🔧 Customization:${NC}"
-    echo "   • Edit ${CYAN}~/.bash_aliases.local${NC} for personal aliases"
+    echo "   • Edit ${CYAN}~/.bashrc.local${NC} for personal configurations"
     echo "   • Edit ${CYAN}~/.config/starship.toml${NC} for prompt customization"
     echo
     echo -e "${YELLOW}📚 Key Features:${NC}"
