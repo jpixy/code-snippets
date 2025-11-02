@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# install_bash_power_universal.sh (English Version)
-# Enhanced Bash Environment Installation Script (RHEL/Ubuntu Compatible)
+# install_bash_power_universal.sh (Enhanced Version)
+# Advanced Bash Environment Installation Script (RHEL/Ubuntu/Debian Compatible)
+# Features: Starship, fzf, ble.sh, bash-completion, modern CLI tools
 
 set -e
 
-echo "🚀 Starting Enhanced Bash Environment Deployment (RHEL/Ubuntu Compatible)..."
+echo "🚀 Starting Advanced Bash Environment Deployment..."
 
 # Color Definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Logging Functions
@@ -44,6 +46,11 @@ OS_TYPE=$(detect_os)
 
 # Check if Command Exists
 command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+# Get Bash Version
+get_bash_version() {
+    bash --version | head -n1 | grep -oP '\d+\.\d+' | head -n1
+}
 
 # Generic Function to Install Binary from GitHub (with Retry)
 install_binary_from_github() {
@@ -98,7 +105,11 @@ install_dependencies() {
                 unzip \
                 zip \
                 make \
-                build-essential
+                build-essential \
+                gawk
+            
+            # Try to install bash-completion extras
+            sudo apt-get install -y bash-completion-extras 2>/dev/null || log_info "bash-completion-extras not available, skipping"
             
             # Try to install modern tools (allow failures)
             sudo apt-get install -y bat ripgrep fd-find 2>/dev/null || log_warning "Some modern tools failed to install via apt, will use alternative methods"
@@ -142,7 +153,8 @@ install_dependencies() {
                     make \
                     gcc \
                     gcc-c++ \
-                    util-linux-user
+                    util-linux-user \
+                    gawk
                 
                 # Try to install modern tools
                 sudo dnf install -y bat ripgrep fd-find 2>/dev/null || log_warning "Some modern tools need manual installation"
@@ -161,7 +173,8 @@ install_dependencies() {
                     make \
                     gcc \
                     gcc-c++ \
-                    util-linux-user
+                    util-linux-user \
+                    gawk
             fi
             
             # RHEL7/CentOS7 special handling - manually install modern tools
@@ -250,7 +263,7 @@ backup_config() {
 
 # Install Starship
 install_starship() {
-    log_info "Installing Starship..."
+    log_info "Installing Starship prompt..."
     
     if command_exists starship; then
         log_success "Starship already installed"
@@ -300,7 +313,7 @@ install_starship() {
 
 # Install fzf
 install_fzf() {
-    log_info "Installing fzf..."
+    log_info "Installing fzf (fuzzy finder)..."
     
     if command_exists fzf; then
         log_success "fzf already installed"
@@ -356,6 +369,60 @@ install_fzf() {
     fi
 }
 
+# Install ble.sh (Bash Line Editor)
+install_blesh() {
+    log_info "Installing ble.sh (Bash Line Editor)..."
+    
+    local blesh_dir="$HOME/.local/share/blesh"
+    
+    if [ -f "$blesh_dir/ble.sh" ]; then
+        log_success "ble.sh already installed"
+        return 0
+    fi
+    
+    # Check Bash version
+    local bash_version=$(get_bash_version)
+    local bash_major=$(echo "$bash_version" | cut -d. -f1)
+    
+    if [ "$bash_major" -lt 4 ]; then
+        log_warning "ble.sh requires Bash 4.0+, current: $bash_version, skipping installation"
+        return 1
+    fi
+    
+    log_info "Bash version $bash_version detected, proceeding with ble.sh installation..."
+    
+    # Ensure required dependencies are available
+    if ! command_exists git; then
+        log_error "Git not available, cannot install ble.sh"
+        return 1
+    fi
+    
+    if ! command_exists make; then
+        log_error "Make not available, cannot install ble.sh"
+        return 1
+    fi
+    
+    # Create directory
+    mkdir -p "$HOME/.local/share"
+    
+    log_info "Cloning ble.sh repository (this may take a moment)..."
+    if git clone --recursive --depth 1 --shallow-submodules \
+        https://github.com/akinomyoga/ble.sh.git "$blesh_dir" 2>/dev/null; then
+        
+        log_info "Building ble.sh..."
+        if make -C "$blesh_dir" install PREFIX="$HOME/.local" 2>/dev/null; then
+            log_success "ble.sh installed successfully"
+            return 0
+        else
+            log_warning "ble.sh build failed, but files are available"
+            return 0
+        fi
+    else
+        log_error "ble.sh clone failed"
+        return 1
+    fi
+}
+
 # Create Enhanced bashrc Configuration
 create_enhanced_bashrc() {
     log_info "Creating enhanced Bash configuration..."
@@ -364,6 +431,7 @@ create_enhanced_bashrc() {
     local has_fzf=$(command_exists fzf && echo "true" || echo "false")
     local has_bat=$(command_exists bat && echo "true" || echo "false")
     local has_starship=$(command_exists starship && echo "true" || echo "false")
+    local has_blesh=$([ -f "$HOME/.local/share/blesh/ble.sh" ] && echo "true" || echo "false")
     
     # Handle Ubuntu's fd command name difference
     local fd_cmd="fd"
@@ -371,55 +439,98 @@ create_enhanced_bashrc() {
         fd_cmd="fdfind"
     fi
     
-    # Use double-quoted heredoc for variable expansion
-    cat > ~/.bashrc.enhanced << EOF
+    # Start creating the bashrc file
+    cat > ~/.bashrc.enhanced << 'BASHRC_HEADER'
 #!/bin/bash
 # =============================================
-# Enhanced Bash Configuration (RHEL/Ubuntu Compatible)
-# Auto-generated on $(date)
-# OS: $OS_TYPE
+# Advanced Bash Configuration (Universal)
+# Auto-generated - Do not edit this header
 # =============================================
 
-# === Basic Configuration ===
-export EDITOR='vim'
-export HISTSIZE=10000
-export HISTFILESIZE=20000
-export HISTCONTROL=ignoreboth:erasedups
-shopt -s histappend
-shopt -s checkwinsize
-shopt -s globstar
-
-# === Color Support ===
-if [ -x /usr/bin/dircolors ]; then
-    test -r ~/.dircolors && eval "\$(dircolors -b ~/.dircolors)" || eval "\$(dircolors -b)"
-    alias ls='ls --color=auto'
-    alias grep='grep --color=auto'
-    alias fgrep='fgrep --color=auto'
-    alias egrep='egrep --color=auto'
+# === ble.sh Early Loading (Phase 1) ===
+# ble.sh must be loaded early with --noattach, then attached at the end
+if [[ $- == *i* ]] && [ -f ~/.local/share/blesh/ble.sh ]; then
+    source ~/.local/share/blesh/ble.sh --noattach
 fi
 
-# === Core Aliases ===
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
-alias lt='ls -laht'
-alias ltr='ls -lahtr'
+BASHRC_HEADER
+
+    # Add metadata with variable expansion
+    cat >> ~/.bashrc.enhanced << EOF
+# Generated on: $(date)
+# OS Type: $OS_TYPE
+# Bash Version: $(get_bash_version)
+# 
+# Tools Installed:
+#   - fzf: $has_fzf
+#   - bat: $has_bat
+#   - starship: $has_starship
+#   - ble.sh: $has_blesh
+# =============================================
 
 EOF
 
-    # Conditionally add bat aliases
+    # Add main configuration
+    cat >> ~/.bashrc.enhanced << 'EOF'
+# === Basic Configuration ===
+export EDITOR='vim'
+export VISUAL='vim'
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+export HISTCONTROL=ignoreboth:erasedups
+export HISTTIMEFORMAT="%F %T "
+
+# Bash shell options
+shopt -s histappend      # Append to history file
+shopt -s checkwinsize    # Update LINES and COLUMNS after each command
+shopt -s globstar 2>/dev/null  # Enable ** recursive globbing (Bash 4+)
+shopt -s cdspell 2>/dev/null   # Auto-correct cd typos
+shopt -s dirspell 2>/dev/null  # Auto-correct directory spelling
+
+# === Color Support ===
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+fi
+
+# Enable color support for ls and grep (preserve original commands)
+if ls --color=auto &>/dev/null; then
+    alias ls='ls --color=auto'
+fi
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+
+# === Core Aliases (Enhanced, Non-Destructive) ===
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias lt='ls -laht'        # Sort by time, newest first
+alias ltr='ls -lahtr'      # Sort by time, oldest first
+alias lss='ls -lhSr'       # Sort by size
+
+EOF
+
+    # Conditionally add bat aliases (NON-DESTRUCTIVE)
     if [ "$has_bat" = "true" ]; then
         cat >> ~/.bashrc.enhanced << 'EOF'
-# === bat Replaces cat ===
+# === bat Integration (Non-Destructive) ===
 if command -v bat >/dev/null 2>&1; then
-    alias cat='bat --paging=never'
-    alias less='bat --paging=always'
+    alias ccat='bat --paging=never'           # Colorful cat
+    alias bless='bat --paging=always'         # Colorful less
+    alias bathelp='bat --plain --language=help'
+    
+    # Helper function for man pages with bat
+    if command -v batcat >/dev/null 2>&1; then
+        export MANPAGER="sh -c 'col -bx | batcat -l man -p'"
+    else
+        export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+    fi
 fi
 
 EOF
     fi
 
-    # Add Git aliases
+    # Add Git aliases (non-destructive)
     cat >> ~/.bashrc.enhanced << 'EOF'
 # === Git Aliases ===
 alias gst='git status'
@@ -431,40 +542,117 @@ alias gd='git diff'
 alias gds='git diff --staged'
 alias ga='git add'
 alias gaa='git add .'
+alias gap='git add -p'
 alias gb='git branch'
 alias gba='git branch -a'
+alias gbd='git branch -d'
 alias gl='git log --oneline --graph --decorate'
 alias gla='git log --oneline --graph --decorate --all'
+alias gll='git log --graph --pretty=format:"%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset" --abbrev-commit'
 alias gps='git push'
 alias gpl='git pull'
+alias gf='git fetch'
 alias gfp='git fetch --prune'
 alias gcl='git clone'
 alias gsw='git switch'
 alias gswc='git switch -c'
 alias grh='git reset --hard'
+alias grs='git reset --soft'
+alias grb='git rebase'
+alias grbi='git rebase -i'
+alias gm='git merge'
+alias gsh='git stash'
+alias gshp='git stash pop'
+alias gshl='git stash list'
 
 # === Directory Navigation ===
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+alias .....='cd ../../../..'
 alias ~='cd ~'
 alias -- -='cd -'
 
+# Quick directory bookmarks
+alias cdl='cd ~/.local'
+alias cdc='cd ~/.config'
+alias cdd='cd ~/Downloads'
+alias cdh='cd ~'
+
 # === Development Tool Aliases ===
+# Docker
+alias d='docker'
+alias dc='docker-compose'
+alias dps='docker ps'
+alias dpa='docker ps -a'
+alias di='docker images'
+alias dex='docker exec -it'
+alias dlogs='docker logs -f'
+
+# NPM/Yarn
 alias nr='npm run'
 alias ni='npm install'
 alias nid='npm install --save-dev'
 alias ns='npm start'
 alias nt='npm test'
+alias nci='npm ci'
 alias y='yarn'
 alias yr='yarn run'
 alias ys='yarn start'
+alias yi='yarn install'
 
-# === System Monitoring ===
+# Python
+alias py='python3'
+alias pip='pip3'
+alias venv='python3 -m venv'
+alias activate='source venv/bin/activate || source .venv/bin/activate'
+
+# === System Monitoring Aliases ===
 alias cpucore='grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "unknown"'
-alias meminfo='free -h 2>/dev/null || echo "free command not available"'
+alias meminfo='free -h 2>/dev/null || top -l 1 | grep PhysMem'
 alias diskusage='df -h'
-alias folderusage='du -sh ./* 2>/dev/null || du -sh * 2>/dev/null'
+alias folderusage='du -sh ./* 2>/dev/null | sort -hr'
+alias ports='netstat -tulanp 2>/dev/null || ss -tulanp'
+alias myip='curl -s https://ifconfig.me'
+alias localip='hostname -I 2>/dev/null || ipconfig getifaddr en0'
+
+# === Utility Functions ===
+# Create directory and cd into it
+mkcd() {
+    mkdir -p "$1" && cd "$1"
+}
+
+# Extract various archive formats
+extract() {
+    if [ -f "$1" ]; then
+        case "$1" in
+            *.tar.bz2)   tar xjf "$1"     ;;
+            *.tar.gz)    tar xzf "$1"     ;;
+            *.bz2)       bunzip2 "$1"     ;;
+            *.rar)       unrar x "$1"     ;;
+            *.gz)        gunzip "$1"      ;;
+            *.tar)       tar xf "$1"      ;;
+            *.tbz2)      tar xjf "$1"     ;;
+            *.tgz)       tar xzf "$1"     ;;
+            *.zip)       unzip "$1"       ;;
+            *.Z)         uncompress "$1"  ;;
+            *.7z)        7z x "$1"        ;;
+            *)           echo "'$1' cannot be extracted via extract()" ;;
+        esac
+    else
+        echo "'$1' is not a valid file"
+    fi
+}
+
+# Quick find
+qfind() {
+    find . -iname "*$1*"
+}
+
+# Process grep
+psgrep() {
+    ps aux | grep -v grep | grep -i -e VSZ -e "$1"
+}
 
 EOF
 
@@ -474,34 +662,65 @@ EOF
         cat >> ~/.bashrc.enhanced << EOF
 # === fzf Configuration ===
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
-export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
-# fzf history search
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --inline-info'
+export FZF_DEFAULT_COMMAND='$fd_cmd --type f --hidden --follow --exclude .git 2>/dev/null || find . -type f'
+export FZF_CTRL_T_COMMAND="\$FZF_DEFAULT_COMMAND"
+export FZF_ALT_C_COMMAND='$fd_cmd --type d --hidden --follow --exclude .git 2>/dev/null || find . -type d'
+
+# fzf: History search
 fh() {
   local selected_command
-  selected_command=\$(history | fzf +s --tac | sed 's/ *[0-9]* *//')
-  [ -n "\$selected_command" ] && eval "\$selected_command"
+  selected_command=\$(history | fzf +s --tac --tiebreak=index | sed 's/ *[0-9]* *//')
+  if [ -n "\$selected_command" ]; then
+    eval "\$selected_command"
+  fi
 }
 
-# fzf directory navigation
+# fzf: Directory navigation
 fcd() {
   local dir
-  dir=\$($fd_cmd --type d 2>/dev/null | fzf)
+  dir=\$($fd_cmd --type d --hidden --follow --exclude .git 2>/dev/null | fzf --preview 'tree -C {} | head -50')
   [ -n "\$dir" ] && cd "\$dir"
 }
 
-# fzf file editing
+# fzf: File search and edit
 fe() {
   local file
-  file=\$(fzf --preview 'head -100 {}') && \${EDITOR:-vim} "\$file"
+  file=\$(fzf --preview 'bat --color=always --line-range :500 {} 2>/dev/null || cat {}')
+  [ -n "\$file" ] && \${EDITOR:-vim} "\$file"
+}
+
+# fzf: Process kill
+fkill() {
+  local pid
+  pid=\$(ps aux | sed 1d | fzf -m | awk '{print \$2}')
+  if [ -n "\$pid" ]; then
+    echo "\$pid" | xargs kill -\${1:-9}
+  fi
+}
+
+# fzf: Git branch checkout
+fgb() {
+  local branch
+  branch=\$(git branch --all | grep -v HEAD | sed 's/^..//' | sed 's#remotes/origin/##' | sort -u | fzf)
+  [ -n "\$branch" ] && git checkout "\$branch"
+}
+
+# fzf: Git log browser
+fgl() {
+  git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "\$@" | \
+  fzf --ansi --no-sort --reverse --tiebreak=index --preview \
+  'echo {} | grep -o "[a-f0-9]\{7\}" | head -1 | xargs -I % git show --color=always %' \
+  --bind "enter:execute:echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs -I % git show --color=always % | less -R"
 }
 
 EOF
     fi
 
-    # Add auto-completion
+    # Add bash-completion configuration
     cat >> ~/.bashrc.enhanced << 'EOF'
-# === Auto-completion ===
+# === Auto-completion (bash-completion) ===
 if ! shopt -oq posix; then
   if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
@@ -512,11 +731,25 @@ if ! shopt -oq posix; then
   fi
 fi
 
+# Load additional completions
+if [ -d /usr/share/bash-completion/completions ]; then
+    for completion in /usr/share/bash-completion/completions/*; do
+        [ -f "$completion" ] && . "$completion" 2>/dev/null
+    done
+fi
+
 # Git auto-completion
 if [ -f /usr/share/bash-completion/completions/git ]; then
     . /usr/share/bash-completion/completions/git
 elif [ -f /etc/bash_completion.d/git ]; then
     . /etc/bash_completion.d/git
+fi
+
+# Docker completion
+if command -v docker >/dev/null 2>&1; then
+    if [ -f /usr/share/bash-completion/completions/docker ]; then
+        . /usr/share/bash-completion/completions/docker
+    fi
 fi
 
 EOF
@@ -525,28 +758,57 @@ EOF
     if [ "$has_starship" = "true" ]; then
         cat >> ~/.bashrc.enhanced << 'EOF'
 # === Starship Prompt ===
-eval "$(starship init bash)"
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init bash)"
+fi
 
 EOF
     else
         cat >> ~/.bashrc.enhanced << 'EOF'
-# === Fallback Prompt ===
+# === Fallback Prompt (Enhanced) ===
 parse_git_branch() {
     git branch 2>/dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
 }
-PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[01;31m\]$(parse_git_branch)\[\033[00m\]\$ '
+
+# Color codes
+PS1_USER_COLOR='\[\033[01;32m\]'
+PS1_HOST_COLOR='\[\033[01;32m\]'
+PS1_PATH_COLOR='\[\033[01;34m\]'
+PS1_GIT_COLOR='\[\033[01;31m\]'
+PS1_RESET='\[\033[00m\]'
+
+PS1="${PS1_USER_COLOR}\u${PS1_RESET}@${PS1_HOST_COLOR}\h${PS1_RESET}:${PS1_PATH_COLOR}\w${PS1_GIT_COLOR}\$(parse_git_branch)${PS1_RESET}\$ "
 
 EOF
     fi
 
-    # Add local configuration and welcome message - use double quotes to expand OS_TYPE
+    # Add ble.sh attachment at the very end
+    if [ "$has_blesh" = "true" ]; then
+        cat >> ~/.bashrc.enhanced << 'EOF'
+# === ble.sh Attachment (Phase 2 - Must be at the end) ===
+# Attach ble.sh if it was loaded earlier
+[[ ${BLE_VERSION-} ]] && ble-attach
+
+EOF
+    fi
+
+    # Add local configuration and welcome message
     cat >> ~/.bashrc.enhanced << EOF
-# === Local Configuration ===
+# === Local Configuration Override ===
+# Add your custom aliases and functions here
 [ -f ~/.bash_aliases.local ] && source ~/.bash_aliases.local
 
 # === Welcome Message ===
-echo -e "\033[1;32m🚀 Enhanced Bash Environment Loaded! ($OS_TYPE)\033[0m"
-echo -e "Available commands: \033[1;33mgst, fh, fcd, fe\033[0m"
+echo -e "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "\033[1;32m🚀 Advanced Bash Environment Loaded!\033[0m"
+echo -e "\033[0;36m   OS: $OS_TYPE | Bash: \$(get_bash_version 2>/dev/null || echo \$BASH_VERSION)\033[0m"
+echo -e "\033[1;33m   Features:\033[0m"
+[ "$has_starship" = "true" ] && echo -e "\033[0;32m   ✓ Starship Prompt\033[0m"
+[ "$has_fzf" = "true" ] && echo -e "\033[0;32m   ✓ fzf Fuzzy Finder\033[0m"
+[ "$has_bat" = "true" ] && echo -e "\033[0;32m   ✓ bat Syntax Highlighter\033[0m"
+[ "$has_blesh" = "true" ] && echo -e "\033[0;32m   ✓ ble.sh Line Editor\033[0m"
+echo -e "\033[1;33m   Quick Commands:\033[0m gst | fh | fcd | fe | ccat"
+echo -e "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 EOF
 
     log_success "Enhanced .bashrc created successfully"
@@ -559,55 +821,146 @@ create_starship_config() {
     mkdir -p ~/.config
     
     cat > ~/.config/starship.toml << 'EOF'
-# Starship Configuration - RHEL/Ubuntu Compatible
+# =============================================
+# Starship Configuration (Optimized)
+# =============================================
 
+# Overall format
 format = """
 $username\
 $hostname\
 $directory\
 $git_branch\
 $git_status\
+$git_state\
+$python\
+$nodejs\
+$rust\
+$golang\
+$docker_context\
 $cmd_duration\
 $line_break\
+$jobs\
+$battery\
 $character"""
 
+# Prompt character
 [character]
 success_symbol = "[➜](bold green)"
 error_symbol = "[✗](bold red)"
+vicmd_symbol = "[←](bold green)"
 
+# Directory
 [directory]
 truncation_length = 3
-truncate_to_repo = false
-style = "bold blue"
+truncate_to_repo = true
+style = "bold cyan"
+read_only = " 🔒"
+read_only_style = "red"
 
+# Git branch
 [git_branch]
-format = "[$branch]($style) "
+format = "[$symbol$branch]($style) "
+symbol = " "
 style = "bold purple"
 
+# Git status
 [git_status]
-conflicted = "═"
+format = '([\[$all_status$ahead_behind\]]($style) )'
+conflicted = "="
 ahead = "⇡${count}"
 behind = "⇣${count}"
-diverged = "⇕"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
 untracked = "?${count}"
+stashed = "$${count}"
 modified = "!${count}"
 staged = "+${count}"
+renamed = "»${count}"
+deleted = "✘${count}"
 style = "bold yellow"
 
-[cmd_duration]
-format = "took [$duration]($style) "
-style = "yellow"
-min_time = 2000
+# Git state (rebase, merge, etc.)
+[git_state]
+format = '[\($state( $progress_current of $progress_total)\)]($style) '
+style = "bright-black"
 
+# Command duration
+[cmd_duration]
+min_time = 2000
+format = "took [$duration]($style) "
+style = "bold yellow"
+
+# Programming Languages
+[python]
+format = '[${symbol}${pyenv_prefix}(${version} )(\($virtualenv\) )]($style)'
+symbol = " "
+style = "yellow"
+
+[nodejs]
+format = "[$symbol($version )]($style)"
+symbol = " "
+style = "green"
+
+[rust]
+format = "[$symbol($version )]($style)"
+symbol = " "
+style = "red"
+
+[golang]
+format = "[$symbol($version )]($style)"
+symbol = " "
+style = "cyan"
+
+# Docker
+[docker_context]
+format = "[$symbol$context]($style) "
+symbol = " "
+style = "blue"
+
+# Battery
+[battery]
+full_symbol = "🔋"
+charging_symbol = "⚡"
+discharging_symbol = "💀"
+display = [
+    { threshold = 10, style = "bold red" },
+    { threshold = 30, style = "bold yellow" },
+]
+
+# Jobs
+[jobs]
+symbol = "✦"
+style = "bold blue"
+number_threshold = 1
+
+# Memory usage
 [memory_usage]
 disabled = false
 threshold = 75
-format = "mem: $ram "
+format = "mem: $ram( | swap: $swap) "
+style = "white dimmed"
 
+# Time
 [time]
 disabled = false
 format = "[$time]($style) "
 style = "bright-black"
+time_format = "%T"
+
+# Username
+[username]
+style_user = "bold green"
+style_root = "bold red"
+format = "[$user]($style)"
+disabled = false
+show_always = false
+
+# Hostname
+[hostname]
+ssh_only = true
+format = "@[$hostname]($style) "
+style = "bold green"
+disabled = false
 EOF
 
     log_success "Starship configuration created successfully"
@@ -623,9 +976,25 @@ complete_installation() {
         log_success "Updated .bashrc"
     fi
     
-    # Create local aliases file
+    # Create local aliases file if it doesn't exist
     if [ ! -f ~/.bash_aliases.local ]; then
-        touch ~/.bash_aliases.local
+        cat > ~/.bash_aliases.local << 'EOF'
+#!/bin/bash
+# =============================================
+# Local Bash Aliases and Functions
+# Add your custom configurations here
+# =============================================
+
+# Example custom aliases:
+# alias myserver='ssh user@server.com'
+# alias myproject='cd ~/projects/myproject'
+
+# Example custom functions:
+# hello() {
+#     echo "Hello, $1!"
+# }
+
+EOF
         chmod 600 ~/.bash_aliases.local
         log_success "Created local aliases file: ~/.bash_aliases.local"
     fi
@@ -636,37 +1005,61 @@ verify_installation() {
     log_info "Verifying installation results..."
     
     echo
-    echo "🔧 Installation Verification:"
-    echo "✅ System Type: $OS_TYPE"
-    command_exists starship && echo "✅ Starship: Installed" || echo "⚠️  Starship: Not installed"
-    command_exists fzf && echo "✅ fzf: Installed" || echo "⚠️  fzf: Not installed"
-    command_exists bat && echo "✅ bat: Installed" || echo "⚠️  bat: Not installed"
-    command_exists rg && echo "✅ ripgrep: Installed" || echo "⚠️  ripgrep: Not installed"
-    (command_exists fd || command_exists fdfind) && echo "✅ fd: Installed" || echo "⚠️  fd: Not installed"
-    [ -f ~/.bashrc ] && echo "✅ Bash Config: Updated" || echo "❌ Bash Config: Failed"
-    [ -f ~/.config/starship.toml ] && echo "✅ Starship Config: Created" || echo "⚠️  Starship Config: Not created"
-    
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}🔧 Installation Verification Report${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
-    log_success "🎉 Deployment Completed!"
+    echo -e "${BLUE}System Information:${NC}"
+    echo "  • OS Type: $OS_TYPE"
+    echo "  • Bash Version: $(get_bash_version)"
     echo
-    echo "📖 Usage Instructions:"
-    echo "   Run: source ~/.bashrc"
-    echo "   Or restart your terminal"
+    echo -e "${BLUE}Core Tools:${NC}"
+    command_exists starship && echo -e "  ${GREEN}✓${NC} Starship: $(starship --version | head -n1)" || echo -e "  ${YELLOW}⚠${NC}  Starship: Not installed"
+    command_exists fzf && echo -e "  ${GREEN}✓${NC} fzf: $(fzf --version)" || echo -e "  ${YELLOW}⚠${NC}  fzf: Not installed"
+    [ -f "$HOME/.local/share/blesh/ble.sh" ] && echo -e "  ${GREEN}✓${NC} ble.sh: Installed" || echo -e "  ${YELLOW}⚠${NC}  ble.sh: Not installed"
     echo
-    echo "🎯 Test Commands:"
-    echo "   gst    # Git status"
-    echo "   fh     # History search (requires fzf)"
-    echo "   fcd    # Directory navigation (requires fzf + fd)"
-    echo "   fe     # File editing (requires fzf)"
+    echo -e "${BLUE}Additional Tools:${NC}"
+    command_exists bat && echo -e "  ${GREEN}✓${NC} bat: $(bat --version | head -n1)" || echo -e "  ${YELLOW}⚠${NC}  bat: Not installed"
+    command_exists rg && echo -e "  ${GREEN}✓${NC} ripgrep: $(rg --version | head -n1)" || echo -e "  ${YELLOW}⚠${NC}  ripgrep: Not installed"
+    (command_exists fd || command_exists fdfind) && echo -e "  ${GREEN}✓${NC} fd: Installed" || echo -e "  ${YELLOW}⚠${NC}  fd: Not installed"
     echo
-    echo "🔧 Customization:"
-    echo "   Edit ~/.bash_aliases.local to add personal aliases"
-    echo "   Edit ~/.config/starship.toml to customize prompt"
+    echo -e "${BLUE}Configuration Files:${NC}"
+    [ -f ~/.bashrc ] && echo -e "  ${GREEN}✓${NC} .bashrc: Updated" || echo -e "  ${RED}✗${NC} .bashrc: Failed"
+    [ -f ~/.config/starship.toml ] && echo -e "  ${GREEN}✓${NC} starship.toml: Created" || echo -e "  ${YELLOW}⚠${NC}  starship.toml: Not created"
+    [ -f ~/.bash_aliases.local ] && echo -e "  ${GREEN}✓${NC} .bash_aliases.local: Ready" || echo -e "  ${YELLOW}⚠${NC}  .bash_aliases.local: Missing"
+    echo
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}🎉 Deployment Completed Successfully!${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    echo -e "${YELLOW}📖 Next Steps:${NC}"
+    echo "   1. Run: ${CYAN}source ~/.bashrc${NC}"
+    echo "   2. Or restart your terminal"
+    echo
+    echo -e "${YELLOW}🎯 Test Commands:${NC}"
+    echo "   • ${CYAN}gst${NC}      Git status"
+    echo "   • ${CYAN}fh${NC}       Fuzzy history search"
+    echo "   • ${CYAN}fcd${NC}      Fuzzy directory navigation"
+    echo "   • ${CYAN}fe${NC}       Fuzzy file edit"
+    echo "   • ${CYAN}ccat${NC}     Colorful cat (bat)"
+    echo "   • ${CYAN}fgl${NC}      Fuzzy git log browser"
+    echo
+    echo -e "${YELLOW}🔧 Customization:${NC}"
+    echo "   • Edit ${CYAN}~/.bash_aliases.local${NC} for personal aliases"
+    echo "   • Edit ${CYAN}~/.config/starship.toml${NC} for prompt customization"
+    echo
+    echo -e "${YELLOW}📚 Key Features:${NC}"
+    echo "   • Syntax highlighting and auto-suggestions (ble.sh)"
+    echo "   • Fuzzy finding for files, directories, history (fzf)"
+    echo "   • Beautiful prompt with git integration (starship)"
+    echo "   • Extensive aliases and functions"
+    echo "   • Smart completion (bash-completion)"
+    echo
 }
 
 # Main Execution Flow
 main() {
-    log_info "Starting enhanced Bash environment deployment..."
+    log_info "Starting advanced Bash environment deployment..."
     log_info "Detected system type: $OS_TYPE"
     
     if [ "$OS_TYPE" = "unknown" ]; then
@@ -674,23 +1067,35 @@ main() {
         exit 1
     fi
     
+    # Check Bash version
+    local bash_version=$(get_bash_version)
+    log_info "Bash version: $bash_version"
+    
     # Install all dependencies first
     if ! install_dependencies; then
         log_error "Dependency installation failed, exiting deployment"
         exit 1
     fi
     
-    # Continue with other installation steps (allow partial failures)
+    # Backup existing configuration
     backup_config
+    
+    # Continue with other installation steps (allow partial failures)
     install_starship || log_warning "Starship installation failed, will use basic prompt"
     install_fzf || log_warning "fzf installation failed, some features unavailable"
+    install_blesh || log_warning "ble.sh installation failed, no line editing enhancements"
+    
+    # Create configuration files
     create_enhanced_bashrc || { log_error "Configuration file creation failed"; exit 1; }
     
     if command_exists starship; then
         create_starship_config
     fi
     
+    # Complete installation
     complete_installation
+    
+    # Verify and display results
     verify_installation
     
     log_success "🎊 All components installed successfully!"
@@ -698,4 +1103,3 @@ main() {
 
 # Execute main function
 main "$@"
-
