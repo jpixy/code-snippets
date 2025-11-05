@@ -757,6 +757,14 @@ METADATA_EOF
     # Add main configuration content
     cat >> ~/.bashrc << 'EOF'
 # =============================================
+# Non-Interactive Shell Check
+# =============================================
+# Return early if not running interactively
+# This prevents output that would break rsync, scp, and other tools
+# that use SSH to execute remote commands
+[[ $- != *i* ]] && return
+
+# =============================================
 # Phase 1: ble.sh Early Loading
 # =============================================
 # ble.sh must be loaded early with --noattach flag
